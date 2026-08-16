@@ -138,6 +138,7 @@ export function AttackItem({
           placeholder="+0"
           className="table-input font-mono"
           style={{ textAlign: 'center' }}
+          title="Attack bonus. Set to 99 (or >21) for a guaranteed hit with 0% chance to crit."
         />
       </td>
 

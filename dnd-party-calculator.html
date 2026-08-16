@@ -438,7 +438,7 @@
             <div v-else class="space-y-2.5 min-w-[860px]">
               <div class="grid grid-cols-12 gap-2 text-[11px] font-mono uppercase tracking-wider text-slate-400 px-2 pb-1 border-b border-slate-800/60">
                 <div class="col-span-2">Attack Name</div>
-                <div class="col-span-1 text-center">Atk Bonus</div>
+                <div class="col-span-1 text-center" title="Attack bonus. Set to 99 (or >21) for a guaranteed hit with 0% chance to crit.">Atk Bonus</div>
                 <div class="col-span-2">Dice (e.g. 2d6)</div>
                 <div class="col-span-1 text-center">Advantage</div>
                 <div class="col-span-1 text-center">Crit On</div>
@@ -472,6 +472,7 @@
                     v-model.number="atk.attackBonus"
                     class="w-full text-xs font-mono text-center bg-slate-900 border border-slate-700/80 focus:border-amber-500 rounded py-1.5 text-slate-200 outline-none"
                     placeholder="+0"
+                    title="Attack bonus. Set to 99 (or >21) for a guaranteed hit with 0% chance to crit."
                   />
                 </div>
 
