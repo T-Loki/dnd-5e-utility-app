@@ -135,15 +135,7 @@ export function Dashboard({
                     const cMetrics = getCharacterMetrics(c);
                     return (
                       <div key={c.id || cIdx} className="dpr-tooltip-row">
-                        <span
-                          className="label"
-                          style={{
-                            maxWidth: '170px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
+                        <span className="label">
                           {c.name || `Hero #${cIdx + 1}`}:
                         </span>
                         <span className="val text-gold">

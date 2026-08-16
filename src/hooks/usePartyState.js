@@ -449,20 +449,14 @@ export function usePartyState() {
   };
 
   const handleDragStart = (e, charIndex, attackIndex) => {
-    const tagName = e.target.tagName.toLowerCase();
-    if (
-      tagName === 'input' ||
-      tagName === 'select' ||
-      tagName === 'button' ||
-      e.target.closest('button') ||
-      e.target.closest('.switch-sm')
-    ) {
-      e.preventDefault();
-      return;
-    }
     setDraggedAttack({ charIndex, attackIndex });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ charIndex, attackIndex }));
+
+    const row = e.target.closest('tr');
+    if (row && e.dataTransfer.setDragImage) {
+      e.dataTransfer.setDragImage(row, 20, 20);
+    }
   };
 
   const handleDragOver = (e, charIndex, attackIndex) => {

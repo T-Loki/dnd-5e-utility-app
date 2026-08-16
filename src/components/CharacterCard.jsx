@@ -105,10 +105,6 @@ export function CharacterCard({
                           <span
                             className="label"
                             style={{
-                              maxWidth: '160px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
                               textDecoration: isAtkEnabled ? 'none' : 'line-through',
                             }}
                           >
@@ -257,8 +253,59 @@ export function CharacterCard({
                   Incl
                 </th>
                 <th style={{ width: '15%', minWidth: '130px' }}>Attack Name</th>
-                <th style={{ width: '7%', minWidth: '60px' }} className="text-center">
-                  To Hit
+                <th
+                  style={{ width: '8%', minWidth: '70px' }}
+                  className="text-center"
+                >
+                  <div className="dpr-hover-wrapper" style={{ cursor: 'help' }}>
+                    <span
+                      className="dpr-hover-trigger"
+                      style={{
+                        borderBottom: '1px dotted rgba(245, 158, 11, 0.6)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.2rem',
+                      }}
+                    >
+                      Atk Bonus ℹ️
+                    </span>
+
+                    <div
+                      className="dpr-tooltip tooltip-center"
+                      style={{
+                        width: '280px',
+                        maxWidth: '90vw',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'normal',
+                        wordBreak: 'normal',
+                        textTransform: 'none',
+                        fontWeight: 'normal',
+                        letterSpacing: 'normal',
+                      }}
+                    >
+                      <div className="dpr-tooltip-header">
+                        <span>🎯 Attack Bonus Tip</span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.74rem',
+                          color: 'var(--text-secondary)',
+                          lineHeight: 1.45,
+                          whiteSpace: 'normal',
+                          wordBreak: 'normal',
+                        }}
+                      >
+                        Set attack bonus to{' '}
+                        <strong className="text-gold font-mono">99</strong> (or{' '}
+                        <span className="font-mono">&gt;21</span>) to make the attack a{' '}
+                        <strong className="text-gold">guaranteed 100% hit</strong> with{' '}
+                        <strong style={{ color: 'var(--accent-crit)' }}>
+                          0% chance to crit
+                        </strong>
+                        .
+                      </div>
+                    </div>
+                  </div>
                 </th>
                 <th style={{ width: '13%', minWidth: '115px' }}>Attack Formula</th>
                 <th style={{ width: '11%', minWidth: '105px' }}>

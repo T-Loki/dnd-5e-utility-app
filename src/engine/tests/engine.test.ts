@@ -101,6 +101,32 @@ describe('D&D 5e Engine Refactor', () => {
       const probInvalidStr = calculateProbabilities({ ...options, critThreshold: 'invalid' as any });
       expect(probInvalidStr.pCrit).toBe(0);
     });
+
+    it('handles atk bonus > 21 with 100% hit and 0% crit across normal, advantage, and disadvantage', () => {
+      const probAtk22Normal = calculateProbabilities({ targetAC: 20, attackBonus: 22, advantageMode: 'normal' });
+      expect(probAtk22Normal.pHit).toBe(1.0);
+      expect(probAtk22Normal.pRegularHit).toBe(1.0);
+      expect(probAtk22Normal.pCrit).toBe(0.0);
+      expect(probAtk22Normal.pMiss).toBe(0.0);
+
+      const probAtk25Adv = calculateProbabilities({ targetAC: 25, attackBonus: 25, advantageMode: 'advantage' });
+      expect(probAtk25Adv.pHit).toBe(1.0);
+      expect(probAtk25Adv.pRegularHit).toBe(1.0);
+      expect(probAtk25Adv.pCrit).toBe(0.0);
+      expect(probAtk25Adv.pMiss).toBe(0.0);
+
+      const probAtk30Dis = calculateProbabilities({ targetAC: 30, attackBonus: 30, advantageMode: 'disadvantage' });
+      expect(probAtk30Dis.pHit).toBe(1.0);
+      expect(probAtk30Dis.pRegularHit).toBe(1.0);
+      expect(probAtk30Dis.pCrit).toBe(0.0);
+      expect(probAtk30Dis.pMiss).toBe(0.0);
+
+      // Boundary check: attackBonus = 21 still follows normal d20 rules with crits possible
+      const probAtk21 = calculateProbabilities({ targetAC: 20, attackBonus: 21, advantageMode: 'normal' });
+      expect(probAtk21.pHit).toBeCloseTo(0.95);
+      expect(probAtk21.pCrit).toBeCloseTo(0.05);
+      expect(probAtk21.pRegularHit).toBeCloseTo(0.90);
+    });
   });
 
   describe('3. Damage Calculation Tests', () => {
@@ -216,6 +242,15 @@ describe('D&D 5e Engine Refactor', () => {
       expect(normalRuleResult.dpr).toBeCloseTo(4.30);
       expect(maxBonusResult.dpr).toBeCloseTo(4.63); // 4.625 rounded
       expect(maxBonusResult.maxPotentialDamage).toBe(20);
+    });
+
+    it('calculates Attack DPR for atk bonus > 21 with guaranteed hit and no crit (1d8 + 5, +22 atk bonus)', () => {
+      const result = calculateAttackDpr({ attackBonus: 22, diceString: '1d8 + 5' }, 20);
+      // Avg regular damage is 4.5 + 5 = 9.5
+      // Hit is 100%, crit is 0% -> DPR = 9.5 * 1.0 = 9.50
+      expect(result.dpr).toBe(9.50);
+      expect(result.regularAvgDamage).toBe(9.5);
+      expect(result.maxPotentialDamage).toBe(13); // Max potential is single hit max 8 + 5 = 13 (no crit)
     });
   });
 
