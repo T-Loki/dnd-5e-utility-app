@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>D&D 5e Party Damage Calculator</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dnd: {
+              gold: '#eab308',
+              crimson: '#dc2626',
+              dark: '#0f172a',
+              card: '#1e293b',
+              cardHover: '#334155',
+              border: '#334155',
+              accent: '#f59e0b',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f19;
+      color: #f1f5f9;
+    }
+    .font-dnd { font-family: 'Cinzel', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .btn-delete-cross {
+      width: 1.65rem;
+      height: 1.65rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.35rem;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #64748b;
+      font-size: 0.85rem;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-delete-cross:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+    .table-select-dark {
+      background-color: #0b1120;
+      color: #f8fafc;
+      border: 1px solid #334155;
+      border-radius: 0.35rem;
+      padding: 0.35rem 0.45rem;
+      font-size: 0.75rem;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.35rem center;
+      background-size: 0.85em;
+      padding-right: 1.3rem;
+    }
+    .table-select-dark:focus {
+      border-color: #f59e0b;
+    }
+    .table-select-dark option {
+      background-color: #0b1120;
+      color: #f8fafc;
+    }
+    .mode-adv {
+      background-color: rgba(6, 78, 59, 0.45) !important;
+      border-color: rgba(16, 185, 129, 0.5) !important;
+      color: #6ee7b7 !important;
+      font-weight: 700;
+    }
+    .mode-dis {
+      background-color: rgba(127, 29, 29, 0.45) !important;
+      border-color: rgba(239, 68, 68, 0.5) !important;
+      color: #fca5a5 !important;
+      font-weight: 700;
+    }
+    .mode-norm {
+      background-color: #0b1120;
+      border-color: #334155;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+  <div id="app" class="flex-1 flex flex-col">
+
+    <!-- Top Navigation / Header -->
+    <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+        
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-red-600 flex items-center justify-center shadow-lg shadow-amber-500/20 text-white font-dnd font-black text-xl">
+            ⚔️
+          </div>
+          <div>
+            <h1 class="text-xl font-black font-dnd tracking-wide text-white flex items-center gap-2">
+              D&amp;D 5e Party Damage Calculator
+              <span class="text-xs font-mono font-normal px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">v1.2</span>
+            </h1>
+            <p class="text-xs text-slate-400">Full 5e probability, critical thresholds, resistance, &amp; separated 25th / 75th percentiles</p>
+          </div>
+        </div>
+
+        <div class="flex items-center flex-wrap gap-2">
+          <input
+            type="file"
+            ref="fileInput"
+            accept="application/json"
+            class="hidden"
+            @change="handleFileUpload"
+          />
+
+          <button
+            @click="triggerImport"
+            class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-md transition flex items-center gap-1.5 shadow-sm"
+          >
+            📥 Import JSON
+          </button>
+
+          <button
+            @click="exportJson"
+            class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-md transition flex items-center gap-1.5 shadow-sm"
+          >
+            📤 Export JSON
+          </button>
+
+          <button
+            @click="resetToDefault"
+            class="px-3 py-1.5 text-xs font-medium bg-slate-800/80 hover:bg-red-900/30 text-slate-400 hover:text-red-300 border border-slate-700/80 hover:border-red-700/50 rounded-md transition"
+          >
+            Reset Defaults
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 flex flex-col gap-6">
+
+      <!-- Top Dashboard Grid: Global Controls & 4 Separated Party Metrics -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        
+        <!-- Target AC Card -->
+        <div class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">Encounter Settings</span>
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title="Live Calculating"></span>
+          </div>
+
+          <div class="flex items-center gap-4 my-auto">
+            <div class="flex-1">
+              <label class="block text-sm font-semibold text-slate-200 mb-1">Target Armor Class (AC)</label>
+              <div class="text-xs text-slate-400">Standard monster AC ranges from 10 to 22.</div>
+            </div>
+            <div class="w-24">
+              <input
+                type="number"
+                v-model.number="targetAC"
+                min="1"
+                max="35"
+                class="w-full text-center text-2xl font-bold font-mono bg-slate-950 border-2 border-amber-500/50 focus:border-amber-400 rounded-lg py-2 px-1 text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-inner"
+              />
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-800/80">
+            <span class="text-xs text-slate-400">Quick Presets:</span>
+            <button
+              v-for="ac in [12, 15, 18, 20]"
+              :key="ac"
+              @click="targetAC = ac"
+              :class="targetAC === ac ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'"
+              class="px-2 py-0.5 text-xs rounded transition font-mono"
+            >
+              AC {{ ac }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Separated Party Summary Metrics -->
+        <div class="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          
+          <!-- 1. Expected DPR -->
+          <div class="bg-gradient-to-br from-slate-900 to-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 shadow-lg flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-amber-400 font-mono">Expected DPR</span>
+                <span class="text-amber-400 text-sm">🎯</span>
+              </div>
+              <div class="mt-2 text-2xl sm:text-3xl font-black font-mono text-amber-300">
+                {{ formatNum(partySummary.totalDpr) }}
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-2 border-t border-slate-800/80 pt-1.5 flex justify-between">
+              <span>Avg Hit:</span>
+              <strong class="text-slate-200 font-mono">{{ formatPercent(partySummary.avgHitChance) }}</strong>
+            </div>
+          </div>
+
+          <!-- 2. 25th Percentile -->
+          <div class="bg-slate-900 border border-sky-500/30 rounded-xl p-3.5 shadow-lg flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-sky-400 font-mono">25th %ile</span>
+                <span class="text-sky-400 text-xs font-mono font-bold">P25</span>
+              </div>
+              <div class="mt-2 text-2xl sm:text-3xl font-black font-mono text-sky-400">
+                {{ formatNum(partySummary.p25) }}
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-2 border-t border-slate-800/80 pt-1.5 flex justify-between">
+              <span>Lower Bound:</span>
+              <strong class="text-sky-300 font-mono">Q1 (hit, no crit)</strong>
+            </div>
+          </div>
+
+          <!-- 3. 75th Percentile -->
+          <div class="bg-slate-900 border border-purple-500/30 rounded-xl p-3.5 shadow-lg flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-purple-400 font-mono">75th %ile</span>
+                <span class="text-purple-400 text-xs font-mono font-bold">P75</span>
+              </div>
+              <div class="mt-2 text-2xl sm:text-3xl font-black font-mono text-purple-300">
+                {{ formatNum(partySummary.p75) }}
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-2 border-t border-slate-800/80 pt-1.5 flex justify-between">
+              <span>Upper Bound:</span>
+              <strong class="text-purple-300 font-mono">Q3 (hit, no crit)</strong>
+            </div>
+          </div>
+
+
+          <!-- 4. Max Potential -->
+          <div class="bg-slate-900 border border-red-500/30 rounded-xl p-3.5 shadow-lg flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-red-400 font-mono">Max Damage</span>
+                <span class="text-red-400 text-sm">💥</span>
+              </div>
+              <div class="mt-2 text-2xl sm:text-3xl font-black font-mono text-red-400">
+                {{ formatNum(partySummary.totalMaxDpr) }}
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-2 border-t border-slate-800/80 pt-1.5 flex justify-between">
+              <span>Crit Max:</span>
+              <strong class="text-red-400 font-mono">{{ partySummary.activeAttackCount }} atk</strong>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Character List Section -->
+      <div class="space-y-5">
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <h2 class="text-lg font-bold font-dnd tracking-wide text-slate-200 flex items-center gap-2">
+              <span>Party Roster</span>
+              <span class="text-xs font-sans font-normal text-slate-400">({{ partySummary.activeCharacterCount }} / {{ characters.length }} active)</span>
+            </h2>
+            <button
+              @click="addCharacter"
+              class="px-2.5 py-1 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded transition"
+            >
+              + Add Character
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              @click="toggleAllCharacters(true)"
+              class="text-xs text-slate-400 hover:text-amber-400 transition underline underline-offset-2"
+            >
+              Enable All
+            </button>
+            <span class="text-slate-600">|</span>
+            <button
+              @click="toggleAllCharacters(false)"
+              class="text-xs text-slate-400 hover:text-amber-400 transition underline underline-offset-2"
+            >
+              Disable All
+            </button>
+          </div>
+        </div>
+
+        <!-- Character Cards -->
+        <div
+          v-for="(char, charIndex) in characters"
+          :key="char.id"
+          class="bg-slate-900 border rounded-xl overflow-hidden transition-all duration-200 shadow-md"
+          :class="char.enabled ? 'border-slate-800 bg-slate-900' : 'border-slate-800/50 bg-slate-950/40 opacity-70'"
+        >
+          
+          <!-- Character Card Header -->
+          <div class="px-4 py-3.5 bg-slate-800/60 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            
+            <div class="flex items-center gap-3 flex-1 min-w-[220px]">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="char.enabled"
+                  class="sr-only peer"
+                />
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+
+              <div class="flex-1">
+                <input
+                  type="text"
+                  v-model="char.name"
+                  placeholder="Character Name (e.g. Rogue, Barbarian)"
+                  class="bg-transparent hover:bg-slate-800/80 focus:bg-slate-950 font-dnd font-bold text-base text-slate-100 focus:text-amber-300 px-2 py-1 rounded border border-transparent focus:border-amber-500/50 outline-none w-full transition"
+                />
+              </div>
+            </div>
+
+            <!-- Right: Character Separated Metrics & Controls -->
+            <div class="flex items-center flex-wrap gap-3">
+              
+              <div class="flex items-center gap-3 bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 font-mono text-xs">
+                <!-- Expected -->
+                <div class="text-right">
+                  <div class="text-[9px] uppercase text-slate-400 font-bold">Expected DPR</div>
+                  <div class="font-black text-amber-400">
+                    {{ formatNum(calcCharacterSummary(char).dpr) }}
+                  </div>
+                </div>
+                <div class="w-[1px] h-5 bg-slate-800"></div>
+
+                <!-- 25th %ile -->
+                <div class="text-right">
+                  <div class="text-[9px] uppercase text-slate-400 font-bold">25th %ile</div>
+                  <div class="font-bold text-sky-400">
+                    {{ formatNum(calcCharacterSummary(char).p25) }}
+                  </div>
+                </div>
+                <div class="w-[1px] h-5 bg-slate-800"></div>
+
+                <!-- 75th %ile -->
+                <div class="text-right">
+                  <div class="text-[9px] uppercase text-slate-400 font-bold">75th %ile</div>
+                  <div class="font-bold text-purple-300">
+                    {{ formatNum(calcCharacterSummary(char).p75) }}
+                  </div>
+                </div>
+                <div class="w-[1px] h-5 bg-slate-800"></div>
+
+                <!-- Max -->
+                <div class="text-right">
+                  <div class="text-[9px] uppercase text-slate-400 font-bold">Max</div>
+                  <div class="font-black text-red-400">
+                    {{ formatNum(calcCharacterSummary(char).maxDpr) }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Controls -->
+              <div class="flex items-center gap-1">
+                <button
+                  @click="addAttack(char)"
+                  class="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded border border-slate-700 transition"
+                  title="Add attack"
+                >
+                  + Attack
+                </button>
+
+                <button
+                  @click="duplicateCharacter(charIndex)"
+                  class="p-1.5 text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-700 rounded transition"
+                  title="Duplicate Character"
+                >
+                  📋
+                </button>
+
+                <button
+                  @click="deleteCharacter(charIndex)"
+                  class="btn-delete-cross"
+                  title="Delete Character"
+                  aria-label="Delete Character"
+                >
+                  ✕
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Attacks Table -->
+          <div class="p-4 overflow-x-auto">
+            <div v-if="char.attacks.length === 0" class="py-6 text-center text-slate-500 text-xs">
+              No attacks configured. Click <button @click="addAttack(char)" class="text-amber-400 underline font-semibold">"Add Attack"</button> to calculate damage.
+            </div>
+
+            <div v-else class="space-y-2.5 min-w-[860px]">
+              <div class="grid grid-cols-12 gap-2 text-[11px] font-mono uppercase tracking-wider text-slate-400 px-2 pb-1 border-b border-slate-800/60">
+                <div class="col-span-2">Attack Name</div>
+                <div class="col-span-1 text-center">To Hit</div>
+                <div class="col-span-2">Dice (e.g. 2d6)</div>
+                <div class="col-span-1 text-center">Advantage</div>
+                <div class="col-span-1 text-center">Crit On</div>
+                <div class="col-span-1 text-center">Resist</div>
+                <div class="col-span-1 text-right">Expected</div>
+                <div class="col-span-1 text-right">25th %ile</div>
+                <div class="col-span-1 text-right">75th %ile</div>
+                <div class="col-span-1 text-right">Max</div>
+              </div>
+
+              <!-- Attack Rows -->
+              <div
+                v-for="(atk, atkIndex) in char.attacks"
+                :key="atk.id"
+                class="grid grid-cols-12 gap-2 items-center bg-slate-950/60 hover:bg-slate-800/40 p-2 rounded-lg border border-slate-800/70 transition"
+              >
+                <!-- 1. Attack Name -->
+                <div class="col-span-2">
+                  <input
+                    type="text"
+                    v-model="atk.name"
+                    placeholder="Attack name"
+                    class="w-full text-xs bg-slate-900 border border-slate-700/80 focus:border-amber-500 rounded px-2 py-1.5 text-slate-200 outline-none"
+                  />
+                </div>
+
+                <!-- 2. Attack Bonus -->
+                <div class="col-span-1">
+                  <input
+                    type="number"
+                    v-model.number="atk.attackBonus"
+                    class="w-full text-xs font-mono text-center bg-slate-900 border border-slate-700/80 focus:border-amber-500 rounded py-1.5 text-slate-200 outline-none"
+                    placeholder="+0"
+                  />
+                </div>
+
+                <!-- 3. Dice String Formula -->
+                <div class="col-span-2">
+                  <input
+                    type="text"
+                    v-model="atk.diceString"
+                    placeholder="e.g. 2d6 + 4"
+                    class="w-full text-xs font-mono bg-slate-900 border border-slate-700/80 focus:border-amber-500 rounded px-2 py-1.5 text-slate-200 outline-none"
+                  />
+                </div>
+
+                <!-- 4. Advantage Mode (Dark Select) -->
+                <div class="col-span-1">
+                  <select
+                    v-model="atk.advantageMode"
+                    class="table-select-dark"
+                    :class="{
+                      'mode-adv': atk.advantageMode === 'advantage',
+                      'mode-dis': atk.advantageMode === 'disadvantage',
+                      'mode-norm': atk.advantageMode === 'normal',
+                    }"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="advantage">ADV</option>
+                    <option value="disadvantage">DIS</option>
+                  </select>
+                </div>
+
+                <!-- 5. Crit Threshold (Dark Select) -->
+                <div class="col-span-1">
+                  <select
+                    v-model.number="atk.critThreshold"
+                    class="table-select-dark font-mono text-center"
+                  >
+                    <option :value="20">20</option>
+                    <option :value="19">19-20</option>
+                    <option :value="18">18-20</option>
+                  </select>
+                </div>
+
+                <!-- 6. Resistance -->
+                <div class="col-span-1 flex justify-center">
+                  <input
+                    type="checkbox"
+                    v-model="atk.isResisted"
+                    class="w-4 h-4 rounded border-slate-700 text-amber-500 bg-slate-900 cursor-pointer"
+                  />
+                </div>
+
+                <!-- 7. Expected DPR -->
+                <div class="col-span-1 text-right font-mono">
+                  <div class="text-xs font-black text-amber-400">
+                    {{ formatNum(calcAttackDpr(atk, targetAC).dpr) }}
+                  </div>
+                  <div class="text-[9px] text-slate-500">
+                    {{ formatPercent(calcAttackDpr(atk, targetAC).pHit) }}
+                  </div>
+                </div>
+
+                <!-- 8. Separated 25th %ile -->
+                <div class="col-span-1 text-right font-mono">
+                  <div class="text-xs font-bold text-sky-400">
+                    {{ formatNum(calcAttackDpr(atk, targetAC).p25) }}
+                  </div>
+                  <div class="text-[9px] text-slate-500">
+                    Q1 (hit, no crit)
+                  </div>
+                </div>
+
+                <!-- 9. Separated 75th %ile -->
+                <div class="col-span-1 text-right font-mono">
+                  <div class="text-xs font-bold text-purple-300">
+                    {{ formatNum(calcAttackDpr(atk, targetAC).p75) }}
+                  </div>
+                  <div class="text-[9px] text-slate-500">
+                    Q3 (hit, no crit)
+                  </div>
+                </div>
+
+
+                <!-- 10. Max Damage & Actions -->
+                <div class="col-span-1 text-right flex items-center justify-end gap-1 font-mono">
+                  <div>
+                    <div class="text-xs font-bold text-red-400">
+                      {{ formatNum(calcAttackDpr(atk, targetAC).maxPotentialDamage) }}
+                    </div>
+                  </div>
+                  <button
+                    @click="deleteAttack(char, atkIndex)"
+                    class="btn-delete-cross"
+                    title="Delete Attack"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    const { createApp, ref, computed, watch, onMounted } = Vue;
+    const STORAGE_KEY = 'dnd_party_damage_calc_state_v1';
+
+    const DEFAULT_PRESET = {
+      targetAC: 15,
+      characters: [
+        {
+          id: 'char-1',
+          name: 'Valeros (Greatsword Champion Fighter)',
+          enabled: true,
+          attacks: [
+            {
+              id: 'atk-1a',
+              name: 'Greatsword Strike #1',
+              attackBonus: 7,
+              diceString: '2d6 + 4',
+              flatBonus: 0,
+              advantageMode: 'normal',
+              critThreshold: 19,
+              isResisted: false,
+            },
+            {
+              id: 'atk-1b',
+              name: 'Greatsword Strike #2',
+              attackBonus: 7,
+              diceString: '2d6 + 4',
+              flatBonus: 0,
+              advantageMode: 'normal',
+              critThreshold: 19,
+              isResisted: false,
+            }
+          ]
+        },
+        {
+          id: 'char-2',
+          name: 'Malaroc (Agonizing Eldritch Blaster)',
+          enabled: true,
+          attacks: [
+            {
+              id: 'atk-2a',
+              name: 'Eldritch Blast Beam 1',
+              attackBonus: 8,
+              diceString: '1d10 + 5',
+              flatBonus: 0,
+              advantageMode: 'advantage',
+              critThreshold: 20,
+              isResisted: false,
+            },
+            {
+              id: 'atk-2b',
+              name: 'Eldritch Blast Beam 2 + Hex',
+              attackBonus: 8,
+              diceString: '1d10 + 1d6 + 5',
+              flatBonus: 0,
+              advantageMode: 'advantage',
+              critThreshold: 20,
+              isResisted: false,
+            }
+          ]
+        }
+      ]
+    };
+
+    createApp({
+      setup() {
+        const targetAC = ref(15);
+        const characters = ref([]);
+        const fileInput = ref(null);
+
+        function uid(prefix = 'id') {
+          return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        }
+
+        function convolve(a, b) {
+          const res = {};
+          for (const va in a) {
+            for (const vb in b) {
+              const s = Number((Number(va) + Number(vb)).toFixed(2));
+              res[s] = (res[s] || 0) + a[va] * b[vb];
+            }
+          }
+          return res;
+        }
+
+        function parseDice(diceString) {
+          if (!diceString || typeof diceString !== 'string') {
+            return { avg: 0, max: 0, diceGroups: [], flat: 0 };
+          }
+          const regex = /([+-]?)\s*(?:(\d*)d(\d+)|(\d+))/gi;
+          let match;
+          let avg = 0, max = 0, flat = 0;
+          const diceGroups = [];
+
+          while ((match = regex.exec(diceString)) !== null) {
+            if (match.index === regex.lastIndex) regex.lastIndex++;
+            const [full, signStr, countStr, dieStr, flatStr] = match;
+            if (!full.trim()) continue;
+            const sign = signStr === '-' ? -1 : 1;
+
+            if (dieStr !== undefined) {
+              const count = countStr === '' || countStr === undefined ? 1 : parseInt(countStr, 10);
+              const die = parseInt(dieStr, 10);
+              if (die > 0 && count > 0) {
+                avg += count * ((die + 1) / 2) * sign;
+                max += count * die * sign;
+                diceGroups.push({ count: count * sign, die });
+              }
+            } else if (flatStr !== undefined) {
+              flat += parseInt(flatStr, 10) * sign;
+            }
+          }
+          return { avg, max, diceGroups, flat };
+        }
+
+        function getDicePmf(diceGroups, flat, isCrit = false) {
+          let pmf = { 0: 1.0 };
+          diceGroups.forEach(g => {
+            const count = isCrit ? g.count * 2 : g.count;
+            const diePmf = {};
+            for (let i = 1; i <= g.die; i++) diePmf[i] = 1 / g.die;
+
+            for (let c = 0; c < Math.abs(count); c++) {
+              if (count > 0) pmf = convolve(pmf, diePmf);
+            }
+          });
+
+          const shifted = {};
+          for (const v in pmf) {
+            const finalVal = Math.max(0, Number(v) + flat);
+            shifted[finalVal] = (shifted[finalVal] || 0) + pmf[v];
+          }
+          return shifted;
+        }
+
+        function getPercentiles(pmf) {
+          const keys = Object.keys(pmf).map(Number).sort((a, b) => a - b);
+          if (keys.length === 0) return { p25: 0, p75: 0 };
+
+          let cum = 0;
+          let p25 = keys[0], p75 = keys[keys.length - 1];
+          let f25 = false, f75 = false;
+
+          for (const k of keys) {
+            cum += pmf[k];
+            if (!f25 && cum >= 0.25 - 1e-9) { p25 = k; f25 = true; }
+            if (!f75 && cum >= 0.75 - 1e-9) { p75 = k; f75 = true; break; }
+          }
+          return { p25, p75 };
+        }
+
+        function calcAttackDpr(attack, ac) {
+          const target = Number(ac) || 10;
+          const bonus = Number(attack.attackBonus) || 0;
+          const extraFlat = Number(attack.flatBonus) || 0;
+          const critThresh = Number(attack.critThreshold) || 20;
+          const advMode = attack.advantageMode || 'normal';
+          const isResisted = Boolean(attack.isResisted);
+
+          const { avg, max, diceGroups, flat } = parseDice(attack.diceString);
+          const totalFlat = flat + extraFlat;
+
+          const R = Math.max(2, Math.min(20, target - bonus));
+          const C = Math.max(1, 21 - critThresh);
+
+          const pSingleHit = Math.max(0, 21 - R) / 20;
+          const pSingleCrit = C / 20;
+
+          let pHit = pSingleHit, pCrit = pSingleCrit;
+          if (advMode === 'advantage') {
+            pHit = 1 - Math.pow(1 - pSingleHit, 2);
+            pCrit = 1 - Math.pow(1 - pSingleCrit, 2);
+          } else if (advMode === 'disadvantage') {
+            pHit = Math.pow(pSingleHit, 2);
+            pCrit = Math.pow(pSingleCrit, 2);
+          }
+
+          const pReg = Math.max(0, pHit - pCrit);
+          const multiplier = isResisted ? 0.5 : 1.0;
+
+          const regDmg = (avg + totalFlat);
+          const critDmg = (avg * 2 + totalFlat);
+          const maxDamage = (max * 2 + totalFlat) * multiplier;
+          const dpr = ((pReg * regDmg) + (pCrit * critDmg)) * multiplier;
+
+          // Compute attack damage percentiles factoring in normal dice + flat and accuracy (pHit)
+          const regPmf = getDicePmf(diceGroups, totalFlat, false);
+          const basePercentiles = getPercentiles(regPmf);
+
+          const p25 = Number((basePercentiles.p25 * pHit * multiplier).toFixed(2));
+          const p75 = Number((basePercentiles.p75 * pHit * multiplier).toFixed(2));
+
+          const accuracyPmf = {};
+          for (const v in regPmf) {
+            const scaled = Number((Number(v) * pHit * multiplier).toFixed(2));
+            accuracyPmf[scaled] = (accuracyPmf[scaled] || 0) + regPmf[v];
+          }
+
+          return {
+            dpr: Math.max(0, dpr),
+            maxPotentialDamage: Math.max(0, maxDamage),
+            p25,
+            p75,
+            pHit,
+            pCrit,
+            onHitPmf: accuracyPmf
+          };
+
+
+        }
+
+        function calcCharacterSummary(character) {
+          if (!character || !character.attacks) {
+            return { dpr: 0, maxDpr: 0, p25: 0, p75: 0, hitChanceAvg: 0 };
+          }
+          let dpr = 0, maxDpr = 0, totalHit = 0;
+          let combinedPmf = { 0: 1.0 };
+
+          character.attacks.forEach(atk => {
+            const res = calcAttackDpr(atk, targetAC.value);
+            dpr += res.dpr;
+            maxDpr += res.maxPotentialDamage;
+            totalHit += res.pHit;
+            combinedPmf = convolve(combinedPmf, res.onHitPmf);
+          });
+
+          const count = character.attacks.length;
+          const percentiles = getPercentiles(combinedPmf);
+
+          return {
+            dpr,
+            maxDpr,
+            p25: percentiles.p25,
+            p75: percentiles.p75,
+            hitChanceAvg: count > 0 ? totalHit / count : 0
+          };
+        }
+
+        const partySummary = computed(() => {
+          let totalDpr = 0, totalMaxDpr = 0, totalHit = 0;
+          let activeAttackCount = 0, activeCharacterCount = 0;
+          let partyPmf = { 0: 1.0 };
+
+          characters.value.forEach(char => {
+            if (char.enabled) {
+              activeCharacterCount++;
+              char.attacks.forEach(atk => {
+                const res = calcAttackDpr(atk, targetAC.value);
+                totalDpr += res.dpr;
+                totalMaxDpr += res.maxPotentialDamage;
+                totalHit += res.pHit;
+                activeAttackCount++;
+                partyPmf = convolve(partyPmf, res.onHitPmf);
+              });
+            }
+          });
+
+          const percentiles = getPercentiles(partyPmf);
+          const avgHitChance = activeAttackCount > 0 ? totalHit / activeAttackCount : 0;
+
+          return {
+            totalDpr,
+            totalMaxDpr,
+            p25: percentiles.p25,
+            p75: percentiles.p75,
+            avgHitChance,
+            activeAttackCount,
+            activeCharacterCount
+          };
+        });
+
+        function addCharacter() {
+          characters.value.push({
+            id: uid('char'),
+            name: `New Hero #${characters.value.length + 1}`,
+            enabled: true,
+            attacks: [
+              {
+                id: uid('atk'),
+                name: 'Primary Attack',
+                attackBonus: 5,
+                diceString: '1d8 + 3',
+                flatBonus: 0,
+                advantageMode: 'normal',
+                critThreshold: 20,
+                isResisted: false,
+              }
+            ]
+          });
+        }
+
+        function duplicateCharacter(index) {
+          const orig = characters.value[index];
+          if (!orig) return;
+          const cloned = JSON.parse(JSON.stringify(orig));
+          cloned.id = uid('char');
+          cloned.name = `${cloned.name} (Copy)`;
+          cloned.attacks.forEach(atk => atk.id = uid('atk'));
+          characters.value.splice(index + 1, 0, cloned);
+        }
+
+        function deleteCharacter(index) {
+          characters.value.splice(index, 1);
+        }
+
+        function toggleAllCharacters(state) {
+          characters.value.forEach(c => c.enabled = state);
+        }
+
+        function addAttack(character) {
+          character.attacks.push({
+            id: uid('atk'),
+            name: `Attack #${character.attacks.length + 1}`,
+            attackBonus: 5,
+            diceString: '1d8 + 3',
+            flatBonus: 0,
+            advantageMode: 'normal',
+            critThreshold: 20,
+            isResisted: false,
+          });
+        }
+
+        function deleteAttack(character, attackIndex) {
+          character.attacks.splice(attackIndex, 1);
+        }
+
+        function formatNum(num) {
+          if (isNaN(num)) return '0.00';
+          return Number(num).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          });
+        }
+
+        function formatPercent(num) {
+          if (isNaN(num)) return '0%';
+          return (Number(num) * 100).toFixed(1) + '%';
+        }
+
+        function saveState() {
+          try {
+            const data = {
+              targetAC: targetAC.value,
+              characters: characters.value,
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          } catch (e) {
+            console.error('Failed to save to localStorage', e);
+          }
+        }
+
+        function loadState() {
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+              const data = JSON.parse(raw);
+              if (data && Array.isArray(data.characters)) {
+                targetAC.value = Number(data.targetAC) || 15;
+                characters.value = data.characters;
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('Error reading localStorage, loading default', e);
+          }
+          resetToDefault();
+        }
+
+        function resetToDefault() {
+          targetAC.value = DEFAULT_PRESET.targetAC;
+          characters.value = JSON.parse(JSON.stringify(DEFAULT_PRESET.characters));
+          saveState();
+        }
+
+        function exportJson() {
+          const exportData = {
+            version: '1.2',
+            exportedAt: new Date().toISOString(),
+            targetAC: targetAC.value,
+            characters: characters.value,
+          };
+          const jsonStr = JSON.stringify(exportData, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `dnd-party-${new Date().toISOString().slice(0,10)}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+
+        function triggerImport() {
+          if (fileInput.value) fileInput.value.click();
+        }
+
+        function handleFileUpload(event) {
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const content = JSON.parse(e.target.result);
+              if (content && Array.isArray(content.characters)) {
+                characters.value = content.characters;
+                if (content.targetAC !== undefined) {
+                  targetAC.value = Number(content.targetAC) || 15;
+                }
+                saveState();
+              }
+            } catch (err) {
+              alert('Error parsing JSON file: ' + err.message);
+            }
+          };
+          reader.readAsText(file);
+          event.target.value = '';
+        }
+
+        watch([targetAC, characters], () => saveState(), { deep: true });
+        onMounted(() => loadState());
+
+        return {
+          targetAC,
+          characters,
+          partySummary,
+          fileInput,
+          calcAttackDpr,
+          calcCharacterSummary,
+          addCharacter,
+          duplicateCharacter,
+          deleteCharacter,
+          toggleAllCharacters,
+          addAttack,
+          deleteAttack,
+          formatNum,
+          formatPercent,
+          resetToDefault,
+          exportJson,
+          triggerImport,
+          handleFileUpload
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
