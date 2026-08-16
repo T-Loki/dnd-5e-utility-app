@@ -42,8 +42,6 @@ export function AttackItem({
   return (
     <tr
       key={atk.id}
-      draggable={true}
-      onDragStart={(e) => handlers.handleDragStart(e, charIdx, atkIdx)}
       onDragOver={(e) => handlers.handleDragOver(e, charIdx, atkIdx)}
       onDragEnd={handlers.handleDragEnd}
       onDrop={(e) => handlers.handleDrop(e, charIdx, atkIdx)}
@@ -55,6 +53,9 @@ export function AttackItem({
       <td className="text-center drag-handle-cell">
         <div
           className="drag-handle"
+          draggable={true}
+          onDragStart={(e) => handlers.handleDragStart(e, charIdx, atkIdx)}
+          onDragEnd={handlers.handleDragEnd}
           title="Drag to reorder attack (drag above or below another attack)"
           aria-label="Drag to reorder attack"
         >

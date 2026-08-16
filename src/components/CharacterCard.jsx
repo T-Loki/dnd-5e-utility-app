@@ -258,7 +258,7 @@ export function CharacterCard({
                 </th>
                 <th style={{ width: '15%', minWidth: '130px' }}>Attack Name</th>
                 <th style={{ width: '7%', minWidth: '60px' }} className="text-center">
-                  To Hit
+                  Atk Bonus
                 </th>
                 <th style={{ width: '13%', minWidth: '115px' }}>Attack Formula</th>
                 <th style={{ width: '11%', minWidth: '105px' }}>

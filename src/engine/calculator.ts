@@ -60,8 +60,19 @@ export function parseDiceString(diceString: string): ParsedDamage {
 }
 
 export function calculateProbabilities(options: HitProbabilityOptions): HitProbabilities {
-  const { targetAC, attackBonus, critThreshold, advantageMode = 'normal' } = options;
+  const { targetAC, attackBonus: rawAttackBonus, critThreshold, advantageMode = 'normal' } = options;
+  const attackBonus = Number(rawAttackBonus) || 0;
   const targetRollNeeded = targetAC - attackBonus;
+
+  if (attackBonus > 21) {
+    return {
+      pHit: 1.0,
+      pRegularHit: 1.0,
+      pCrit: 0.0,
+      pMiss: 0.0,
+      targetRollNeeded,
+    };
+  }
 
   const rawCrit =
     critThreshold === undefined || critThreshold === null
