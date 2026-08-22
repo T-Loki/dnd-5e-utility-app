@@ -57,3 +57,54 @@ export interface ParsedDamage {
   raw: string;
   parts: DamagePart[];
 }
+
+export interface AcSweepPoint {
+  ac: number;
+  partyTotal: number;
+  [key: string]: number;
+}
+
+export interface DamageDistributionPoint {
+  damage: number;
+  probability: number;
+  percent: number;
+  cumulativeChance: number;
+  cumulativePercent: number;
+  isP25?: boolean;
+  isMedian?: boolean;
+  isP75?: boolean;
+}
+
+export interface DamageDistributionResult {
+  data: DamageDistributionPoint[];
+  p25: number;
+  median: number;
+  p75: number;
+  mean: number;
+  maxDamage: number;
+  rawPmf: Map<number, number>;
+}
+
+export interface SurvivalCdfPoint {
+  damage: number;
+  partyTotal: number;
+  [key: string]: number;
+}
+
+export interface PartyDprShareItem {
+  id: string;
+  name: string;
+  dpr: number;
+  share: number;
+  attackCount: number;
+}
+
+export interface AttackDprShareItem {
+  id: string;
+  name: string;
+  dpr: number;
+  share: number;
+  diceString: string;
+  attackBonus: number;
+  pHit: number;
+}

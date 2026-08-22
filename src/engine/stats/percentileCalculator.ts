@@ -3,7 +3,17 @@
  * Exact discrete probability mass function (PMF) and percentile calculator for D&D 5e dice & attack damage.
  */
 
-import { ParsedDamage, HitProbabilities, CritRule } from '../types';
+import {
+  ParsedDamage,
+  HitProbabilities,
+  CritRule,
+  AttackConfig,
+  CharacterConfig,
+  DamageDistributionPoint,
+  DamageDistributionResult,
+  SurvivalCdfPoint,
+} from '../types';
+import { parseDiceString, calculateProbabilities } from '../calculator';
 
 export interface PercentileResult {
   p25: number;
@@ -380,4 +390,241 @@ export function combineAttackPercentiles(attackPmfs: Map<number, number>[]): {
   }
 
   return getPercentilesFromPmf(totalPmf);
+}
+
+/**
+ * Formats a raw discrete PMF Map into a structured array and summary stats for charting.
+ */
+export function formatPmfToDistribution(rawPmf: Map<number, number>): DamageDistributionResult {
+  if (!rawPmf || rawPmf.size === 0) {
+    return {
+      data: [
+        {
+          damage: 0,
+          probability: 1.0,
+          percent: 100,
+          cumulativeChance: 1.0,
+          cumulativePercent: 100,
+          isP25: true,
+          isMedian: true,
+          isP75: true,
+        },
+      ],
+      p25: 0,
+      median: 0,
+      p75: 0,
+      mean: 0,
+      maxDamage: 0,
+      rawPmf: new Map([[0, 1.0]]),
+    };
+  }
+
+  const { p25, median, p75 } = getPercentilesFromPmf(rawPmf);
+
+  let maxDamage = 0;
+  let mean = 0;
+  for (const [dmg, prob] of rawPmf.entries()) {
+    if (dmg > maxDamage && prob > 1e-7) maxDamage = dmg;
+    mean += dmg * prob;
+  }
+
+  const keys = Array.from(rawPmf.keys()).sort((a, b) => a - b);
+  const isAllInteger = keys.every((k) => Number.isInteger(k));
+
+  const allDamagePoints: number[] = [];
+  if (isAllInteger && maxDamage <= 500) {
+    for (let i = 0; i <= Math.ceil(maxDamage); i++) {
+      allDamagePoints.push(i);
+    }
+  } else {
+    const set = new Set([0, ...keys]);
+    allDamagePoints.push(...Array.from(set).sort((a, b) => a - b));
+  }
+
+  const data: DamageDistributionPoint[] = [];
+
+  for (let i = 0; i < allDamagePoints.length; i++) {
+    const dmg = allDamagePoints[i];
+    const prob = rawPmf.get(dmg) || 0;
+
+    let cumulative = 0;
+    for (const [v, p] of rawPmf.entries()) {
+      if (v >= dmg - 1e-9) {
+        cumulative += p;
+      }
+    }
+
+    data.push({
+      damage: dmg,
+      probability: Number(prob.toFixed(6)),
+      percent: Number((prob * 100).toFixed(3)),
+      cumulativeChance: Number(Math.min(1, Math.max(0, cumulative)).toFixed(6)),
+      cumulativePercent: Number((Math.min(1, Math.max(0, cumulative)) * 100).toFixed(2)),
+      isP25: dmg === p25,
+      isMedian: dmg === median,
+      isP75: dmg === p75,
+    });
+  }
+
+  return {
+    data,
+    p25,
+    median,
+    p75,
+    mean: Number(mean.toFixed(2)),
+    maxDamage,
+    rawPmf,
+  };
+}
+
+/**
+ * Convolves all enabled attacks for a single character into a complete turn damage PMF.
+ */
+export function getTurnDamagePmf(
+  attacks: AttackConfig[] = [],
+  targetAc: number = 15,
+  critRule: CritRule = 'double_dice'
+): DamageDistributionResult {
+  const activeAttacks = (attacks || []).filter((atk) => atk && atk.enabled !== false);
+
+  if (activeAttacks.length === 0) {
+    return formatPmfToDistribution(new Map([[0, 1.0]]));
+  }
+
+  let convolvedPmf: Map<number, number> | null = null;
+
+  for (const atk of activeAttacks) {
+    try {
+      const expr = parseDiceString(atk.diceString || '1d8');
+      const probs = calculateProbabilities({
+        targetAC: targetAc,
+        attackBonus: Number(atk.attackBonus) || 0,
+        critThreshold: atk.critThreshold,
+        advantageMode: atk.advantageMode || 'normal',
+      });
+      const mult = atk.isResisted ? 0.5 : atk.isVulnerable ? 2.0 : 1.0;
+      const attackCritRule = critRule || atk.critRule || 'double_dice';
+      const singlePmf = buildAttackRoundPmf(expr, probs, mult, attackCritRule);
+
+      if (!convolvedPmf) {
+        convolvedPmf = singlePmf;
+      } else {
+        convolvedPmf = convolvePmf(convolvedPmf, singlePmf);
+      }
+    } catch {
+      const zeroPmf = new Map([[0, 1.0]]);
+      convolvedPmf = convolvedPmf ? convolvePmf(convolvedPmf, zeroPmf) : zeroPmf;
+    }
+  }
+
+  return formatPmfToDistribution(convolvedPmf || new Map([[0, 1.0]]));
+}
+
+/**
+ * Convolves all enabled attacks across all enabled characters into the total party turn damage PMF.
+ */
+export function getPartyDamagePmf(
+  characters: CharacterConfig[] = [],
+  targetAc: number = 15,
+  critRule: CritRule = 'double_dice'
+): DamageDistributionResult {
+  const activeCharacters = (characters || []).filter((char) => char && char.enabled !== false);
+
+  let convolvedPartyPmf: Map<number, number> | null = null;
+
+  for (const char of activeCharacters) {
+    const charAttacks = (char.attacks || []).filter((atk) => atk && atk.enabled !== false);
+    for (const atk of charAttacks) {
+      try {
+        const expr = parseDiceString(atk.diceString || '1d8');
+        const probs = calculateProbabilities({
+          targetAC: targetAc,
+          attackBonus: Number(atk.attackBonus) || 0,
+          critThreshold: atk.critThreshold,
+          advantageMode: atk.advantageMode || 'normal',
+        });
+        const mult = atk.isResisted ? 0.5 : atk.isVulnerable ? 2.0 : 1.0;
+        const attackCritRule = critRule || atk.critRule || 'double_dice';
+        const singlePmf = buildAttackRoundPmf(expr, probs, mult, attackCritRule);
+
+        if (!convolvedPartyPmf) {
+          convolvedPartyPmf = singlePmf;
+        } else {
+          convolvedPartyPmf = convolvePmf(convolvedPartyPmf, singlePmf);
+        }
+      } catch {
+        // Fallback gracefully on invalid attack
+      }
+    }
+  }
+
+  return formatPmfToDistribution(convolvedPartyPmf || new Map([[0, 1.0]]));
+}
+
+/**
+ * Computes the discrete Survival Cumulative Distribution Function (CDF): P(Damage >= X)
+ * for both the entire party and each active individual character.
+ */
+export function calculateSurvivalCdf(
+  characters: CharacterConfig[] = [],
+  targetAc: number = 15,
+  critRule: CritRule = 'double_dice'
+): SurvivalCdfPoint[] {
+  const activeCharacters = (characters || []).filter((char) => char && char.enabled !== false);
+  const partyDistribution = getPartyDamagePmf(characters, targetAc, critRule);
+
+  const charDistributions = activeCharacters.map((char) => ({
+    char,
+    dist: getTurnDamagePmf(char.attacks || [], targetAc, critRule),
+  }));
+
+  const maxDamage = Math.max(
+    partyDistribution.maxDamage || 0,
+    ...charDistributions.map((c) => c.dist.maxDamage || 0),
+    0
+  );
+
+  const points: SurvivalCdfPoint[] = [];
+
+  const getSurvivalChance = (rawPmf: Map<number, number>, d: number): number => {
+    if (!rawPmf || rawPmf.size === 0) return d === 0 ? 100 : 0;
+    let sum = 0;
+    for (const [val, prob] of rawPmf.entries()) {
+      if (val >= d - 1e-9) {
+        sum += prob;
+      }
+    }
+    const percent = Math.min(100, Math.max(0, sum * 100));
+    return Number(percent.toFixed(2));
+  };
+
+  const limit = Math.min(maxDamage, 1000);
+
+  for (let d = 0; d <= limit; d++) {
+    const point: SurvivalCdfPoint = {
+      damage: d,
+      partyTotal: getSurvivalChance(partyDistribution.rawPmf, d),
+    };
+
+    for (const { char, dist } of charDistributions) {
+      const chance = getSurvivalChance(dist.rawPmf, d);
+      if (char.id) {
+        point[char.id] = chance;
+      }
+      if (char.name) {
+        point[char.name] = chance;
+      }
+      if (!char.id && !char.name) {
+        point['unknown'] = chance;
+      }
+    }
+
+    points.push(point);
+  }
+
+  if (points.length === 0) {
+    points.push({ damage: 0, partyTotal: 100 });
+  }
+
+  return points;
 }

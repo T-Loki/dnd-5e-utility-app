@@ -11,6 +11,7 @@ export function CharacterList({
   draggedAttack,
   dropTarget,
   handlers,
+  onOpenDistributionModal,
 }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -117,6 +118,7 @@ export function CharacterList({
           draggedAttack={draggedAttack}
           dropTarget={dropTarget}
           handlers={handlers}
+          onOpenDistributionModal={onOpenDistributionModal}
         />
       ))}
     </section>
