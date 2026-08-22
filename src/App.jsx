@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { usePartyState } from './hooks/usePartyState';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
 import { CharacterList } from './components/CharacterList';
+import { AnalyticsView } from './components/AnalyticsView';
+import { DistributionModal } from './components/DistributionModal';
+import { ChangelogModal } from './components/ChangelogModal';
 
 export default function App() {
   const {
@@ -18,8 +21,27 @@ export default function App() {
     partySummary,
     getAttackMetrics,
     getCharacterMetrics,
+    activeTab,
+    setActiveTab,
+    acSweepData,
     handlers,
   } = usePartyState();
+
+  const [modalConfig, setModalConfig] = useState(null);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+
+  const handleOpenDistributionModal = (config) => {
+    setModalConfig({
+      isOpen: true,
+      targetAC,
+      critRule,
+      ...config,
+    });
+  };
+
+  const handleCloseDistributionModal = () => {
+    setModalConfig(null);
+  };
 
   if (!isLoaded) {
     return (
@@ -41,31 +63,70 @@ export default function App() {
         setTargetAC={setTargetAC}
         setCritRule={setCritRule}
         handleResetDefaults={handlers.handleResetDefaults}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenChangelog={() => setIsChangelogOpen(true)}
       />
 
       <main className="app-main">
-        <Dashboard
+        {activeTab === 'roster' ? (
+          <>
+            <Dashboard
+              targetAC={targetAC}
+              setTargetAC={setTargetAC}
+              critRule={critRule}
+              setCritRule={setCritRule}
+              partySummary={partySummary}
+              characters={characters}
+              getCharacterMetrics={getCharacterMetrics}
+              onOpenDistributionModal={handleOpenDistributionModal}
+            />
+
+            <CharacterList
+              characters={characters}
+              targetAC={targetAC}
+              critRule={critRule}
+              partySummary={partySummary}
+              getCharacterMetrics={getCharacterMetrics}
+              getAttackMetrics={getAttackMetrics}
+              draggedAttack={draggedAttack}
+              dropTarget={dropTarget}
+              handlers={handlers}
+              onOpenDistributionModal={handleOpenDistributionModal}
+            />
+          </>
+        ) : (
+          <AnalyticsView
+            targetAC={targetAC}
+            setTargetAC={setTargetAC}
+            critRule={critRule}
+            setCritRule={setCritRule}
+            characters={characters}
+            acSweepData={acSweepData}
+          />
+        )}
+      </main>
+
+      {modalConfig && (
+        <DistributionModal
+          isOpen={modalConfig.isOpen}
+          onClose={handleCloseDistributionModal}
+          title={modalConfig.title}
+          subtitle={modalConfig.subtitle}
           targetAC={targetAC}
           setTargetAC={setTargetAC}
           critRule={critRule}
-          setCritRule={setCritRule}
-          partySummary={partySummary}
+          char={modalConfig.char}
           characters={characters}
-          getCharacterMetrics={getCharacterMetrics}
+          type={modalConfig.type}
+          distributionResult={modalConfig.distributionResult}
         />
+      )}
 
-        <CharacterList
-          characters={characters}
-          targetAC={targetAC}
-          critRule={critRule}
-          partySummary={partySummary}
-          getCharacterMetrics={getCharacterMetrics}
-          getAttackMetrics={getAttackMetrics}
-          draggedAttack={draggedAttack}
-          dropTarget={dropTarget}
-          handlers={handlers}
-        />
-      </main>
+      <ChangelogModal
+        isOpen={isChangelogOpen}
+        onClose={() => setIsChangelogOpen(false)}
+      />
     </div>
   );
 }

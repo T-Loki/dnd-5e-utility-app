@@ -8,6 +8,9 @@ export function Header({
   setTargetAC,
   setCritRule,
   handleResetDefaults,
+  activeTab = 'roster',
+  setActiveTab,
+  onOpenChangelog,
 }) {
   const fileInputRef = useRef(null);
 
@@ -81,6 +84,27 @@ export function Header({
           </div>
         </div>
 
+        {setActiveTab && (
+          <nav className="header-nav-tabs" aria-label="Main Navigation">
+            <button
+              type="button"
+              className={`header-tab-btn ${activeTab === 'roster' ? 'active' : ''}`}
+              onClick={() => setActiveTab('roster')}
+            >
+              <span className="tab-icon">⚔️</span>
+              <span>Roster Builder</span>
+            </button>
+            <button
+              type="button"
+              className={`header-tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => setActiveTab('analytics')}
+            >
+              <span className="tab-icon">📊</span>
+              <span>Analytics &amp; Visuals</span>
+            </button>
+          </nav>
+        )}
+
         <div className="header-actions">
           <input
             type="file"
@@ -89,6 +113,14 @@ export function Header({
             style={{ display: 'none' }}
             onChange={handleFileUpload}
           />
+
+          <button
+            onClick={onOpenChangelog}
+            className="btn btn-sm btn-changelog"
+            title="View Patch Notes & Changelog"
+          >
+            📜 Changelog
+          </button>
 
           <button
             onClick={handleImportClick}

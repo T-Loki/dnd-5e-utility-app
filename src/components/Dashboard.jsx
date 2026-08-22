@@ -1,4 +1,5 @@
 import React from 'react';
+import { getPartyDamagePmf } from '../engine/dprEngine';
 
 const formatNum = (val) => {
   if (isNaN(val)) return '0.00';
@@ -21,7 +22,22 @@ export function Dashboard({
   partySummary,
   characters,
   getCharacterMetrics,
+  onOpenDistributionModal,
 }) {
+  const handleOpenPartyCurve = (e) => {
+    e.stopPropagation();
+    if (!onOpenDistributionModal) return;
+    const distResult = getPartyDamagePmf(characters, Number(targetAC) || 15, critRule);
+    onOpenDistributionModal({
+      type: 'party',
+      characters,
+      title: 'Party Total Damage Distribution',
+      subtitle: `Full turn damage probability mass function across all active party members against Target AC ${targetAC}`,
+      distributionResult: distResult,
+      targetAC,
+      critRule,
+    });
+  };
   return (
     <section className="dashboard-grid">
       {/* Box 1: Global Settings */}
@@ -99,8 +115,15 @@ export function Dashboard({
           <div className="dpr-hover-trigger" style={{ width: '100%', borderBottom: 'none', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div className="metric-label">
-                <span>Expected Damage Per Round (DPR)</span>
-                <span title="Hover for calculation breakdown">🎯 ℹ️</span>
+                <span>Expected Damage (DPR)</span>
+                <button
+                  type="button"
+                  className="btn-badge-action"
+                  onClick={handleOpenPartyCurve}
+                  title="Open Party Full PMF Damage Distribution Curve"
+                >
+                  📊 View Curve
+                </button>
               </div>
               <div className="metric-value text-gold">
                 {formatNum(partySummary.totalDpr)}
@@ -168,9 +191,14 @@ export function Dashboard({
         <div>
           <div className="metric-label">
             <span>On-Hit Percentiles</span>
-            <span className="font-mono" style={{ color: 'var(--accent-p50)', fontSize: '0.65rem' }}>
-              P25 / P50 / P75
-            </span>
+            <button
+              type="button"
+              className="btn-badge-action"
+              onClick={handleOpenPartyCurve}
+              title="Open Party Full PMF Damage Distribution Curve"
+            >
+              📊 Curve
+            </button>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.35rem' }}>
