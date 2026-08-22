@@ -2,11 +2,17 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateAttackDpr,
   calculateCharacterDpr,
+  calculateAcSweep,
   calculateAttackProbabilities,
   DiceParser,
   calculateAttackPercentiles,
   buildAttackOnHitPmf,
   combineAttackPercentiles,
+  getTurnDamagePmf,
+  getPartyDamagePmf,
+  calculateSurvivalCdf,
+  calculatePartyDprShare,
+  calculateCharacterAttackShare,
 } from '../dprEngine';
 import { calculateProbabilities, calculateDamage } from '../calculator';
 
@@ -382,6 +388,437 @@ describe('D&D 5e Engine Refactor', () => {
       
       const charDpr = calculateCharacterDpr(charConfig, 15);
       expect(charDpr).toBeCloseTo(singleAtkDpr, 5);
+    });
+  });
+
+  describe('8. AC Sensitivity Sweep Tests (calculateAcSweep)', () => {
+    const sampleCharacters = [
+      {
+        id: 'c1',
+        name: 'Fighter',
+        enabled: true,
+        attacks: [
+          { attackBonus: 5, diceString: '1d8 + 3', enabled: true },
+          { attackBonus: 5, diceString: '1d8 + 3', enabled: false },
+        ],
+      },
+      {
+        id: 'c2',
+        name: 'Wizard',
+        enabled: true,
+        attacks: [
+          { attackBonus: 6, diceString: '1d10', enabled: true },
+        ],
+      },
+      {
+        id: 'c3',
+        name: 'Disabled Ranger',
+        enabled: false,
+        attacks: [
+          { attackBonus: 7, diceString: '1d8 + 4', enabled: true },
+        ],
+      },
+    ];
+
+    it('returns an array spanning exactly AC 10 through 25', () => {
+      const sweep = calculateAcSweep(sampleCharacters, 'double_dice', 10, 25);
+      expect(sweep.length).toBe(16);
+      expect(sweep[0].ac).toBe(10);
+      expect(sweep[sweep.length - 1].ac).toBe(25);
+      expect(sweep.map((pt) => pt.ac)).toEqual([
+        10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+      ]);
+    });
+
+    it('excludes disabled characters and disabled attacks from partyTotal and individual entries', () => {
+      const sweep = calculateAcSweep(sampleCharacters, 'double_dice', 10, 25);
+      const ac15 = sweep.find((pt) => pt.ac === 15);
+      expect(ac15).toBeDefined();
+
+      const singleFighterAtk = calculateAttackDpr({ attackBonus: 5, diceString: '1d8 + 3' }, 15).dpr;
+      const wizardAtk = calculateAttackDpr({ attackBonus: 6, diceString: '1d10' }, 15).dpr;
+
+      // Fighter has 1 enabled attack and 1 disabled attack
+      expect(ac15!['Fighter']).toBeCloseTo(singleFighterAtk, 2);
+      expect(ac15!['Wizard']).toBeCloseTo(wizardAtk, 2);
+      // Disabled Ranger should not be counted
+      expect(ac15!['Disabled Ranger']).toBeUndefined();
+      expect(ac15!.partyTotal).toBeCloseTo(Number((singleFighterAtk + wizardAtk).toFixed(2)), 2);
+    });
+
+    it('reflects active critRule (max_damage_bonus yields higher or equal DPR)', () => {
+      const sweepDouble = calculateAcSweep(sampleCharacters, 'double_dice', 10, 25);
+      const sweepMax = calculateAcSweep(sampleCharacters, 'max_damage_bonus', 10, 25);
+
+      for (let i = 0; i < sweepDouble.length; i++) {
+        expect(sweepMax[i].partyTotal).toBeGreaterThanOrEqual(sweepDouble[i].partyTotal);
+      }
+    });
+
+    it('handles duplicate character names safely with unique id keys', () => {
+      const duplicateChars = [
+        {
+          id: 'char-alpha',
+          name: 'Warrior',
+          enabled: true,
+          attacks: [{ attackBonus: 5, diceString: '1d8 + 3', enabled: true }],
+        },
+        {
+          id: 'char-beta',
+          name: 'Warrior',
+          enabled: true,
+          attacks: [{ attackBonus: 7, diceString: '2d6 + 4', enabled: true }],
+        },
+      ];
+
+      const sweep = calculateAcSweep(duplicateChars, 'double_dice', 15, 15);
+      expect(sweep.length).toBe(1);
+      expect(sweep[0]['char-alpha']).toBeDefined();
+      expect(sweep[0]['char-beta']).toBeDefined();
+      expect(sweep[0]['char-alpha']).not.toEqual(sweep[0]['char-beta']);
+      expect(sweep[0].partyTotal).toBeCloseTo(sweep[0]['char-alpha'] + sweep[0]['char-beta'], 2);
+    });
+
+    it('handles empty characters, zero attacks, or all disabled without NaN or crashing', () => {
+      const emptySweep = calculateAcSweep([], 'double_dice', 10, 25);
+      expect(emptySweep.length).toBe(16);
+      emptySweep.forEach((pt) => {
+        expect(pt.partyTotal).toBe(0);
+        expect(Number.isNaN(pt.partyTotal)).toBe(false);
+      });
+
+      const allDisabledChars = [
+        {
+          id: 'c1',
+          name: 'Fighter',
+          enabled: false,
+          attacks: [{ attackBonus: 5, diceString: '1d8 + 3', enabled: true }],
+        },
+        {
+          id: 'c2',
+          name: 'Mage',
+          enabled: true,
+          attacks: [{ attackBonus: 5, diceString: '1d8 + 3', enabled: false }],
+        },
+      ];
+
+      const disabledSweep = calculateAcSweep(allDisabledChars, 'double_dice', 10, 25);
+      disabledSweep.forEach((pt) => {
+        expect(pt.partyTotal).toBe(0);
+      });
+    });
+  });
+
+  describe('9. Turn & Party Damage Distribution PMF Tests', () => {
+    const sampleAttacks = [
+      {
+        id: 'atk-1',
+        name: 'Greatsword',
+        attackBonus: 5,
+        diceString: '2d6 + 3',
+        enabled: true,
+      },
+      {
+        id: 'atk-2',
+        name: 'Offhand Dagger',
+        attackBonus: 5,
+        diceString: '1d4',
+        enabled: true,
+      },
+      {
+        id: 'atk-3',
+        name: 'Disabled Smite',
+        attackBonus: 5,
+        diceString: '2d8',
+        enabled: false,
+      },
+    ];
+
+    const sampleCharacters = [
+      {
+        id: 'c1',
+        name: 'Paladin',
+        enabled: true,
+        attacks: sampleAttacks,
+      },
+      {
+        id: 'c2',
+        name: 'Wizard',
+        enabled: true,
+        attacks: [
+          {
+            id: 'atk-wiz',
+            name: 'Fire Bolt',
+            attackBonus: 6,
+            diceString: '1d10',
+            enabled: true,
+          },
+        ],
+      },
+      {
+        id: 'c3',
+        name: 'Inactive Rogue',
+        enabled: false,
+        attacks: [
+          {
+            id: 'atk-rogue',
+            name: 'Sneak Attack',
+            attackBonus: 7,
+            diceString: '1d6 + 3d6 + 4',
+            enabled: true,
+          },
+        ],
+      },
+    ];
+
+    it('verifies that single-character convolved turn PMF sums to 1.0', () => {
+      const dist = getTurnDamagePmf(sampleAttacks, 15, 'double_dice');
+      expect(dist.data.length).toBeGreaterThan(0);
+
+      const totalProb = dist.data.reduce((sum, pt) => sum + pt.probability, 0);
+      expect(totalProb).toBeCloseTo(1.0, 4);
+
+      // Check rawPmf sum directly
+      let rawSum = 0;
+      for (const p of dist.rawPmf.values()) rawSum += p;
+      expect(rawSum).toBeCloseTo(1.0, 5);
+    });
+
+    it('verifies that party convolved turn PMF sums to 1.0', () => {
+      const partyDist = getPartyDamagePmf(sampleCharacters, 15, 'double_dice');
+      expect(partyDist.data.length).toBeGreaterThan(0);
+
+      const totalProb = partyDist.data.reduce((sum, pt) => sum + pt.probability, 0);
+      expect(totalProb).toBeCloseTo(1.0, 4);
+    });
+
+    it('excludes disabled attacks and disabled characters from the distribution PMF', () => {
+      // Individual turn PMF with disabled atk-3 vs without atk-3
+      const distWithDisabled = getTurnDamagePmf(sampleAttacks, 15, 'double_dice');
+      const distOnlyEnabled = getTurnDamagePmf(
+        sampleAttacks.filter((a) => a.enabled !== false),
+        15,
+        'double_dice'
+      );
+
+      expect(distWithDisabled.maxDamage).toEqual(distOnlyEnabled.maxDamage);
+      expect(distWithDisabled.mean).toBeCloseTo(distOnlyEnabled.mean, 2);
+
+      // Party PMF excluding inactive rogue
+      const partyDist = getPartyDamagePmf(sampleCharacters, 15, 'double_dice');
+      const partyOnlyActive = getPartyDamagePmf(
+        sampleCharacters.filter((c) => c.enabled !== false),
+        15,
+        'double_dice'
+      );
+
+      expect(partyDist.mean).toBeCloseTo(partyOnlyActive.mean, 2);
+      expect(partyDist.maxDamage).toEqual(partyOnlyActive.maxDamage);
+    });
+
+    it('verifies that cumulative probability is monotonic non-increasing from 1.0 to 0', () => {
+      const dist = getTurnDamagePmf(sampleAttacks, 15, 'double_dice');
+
+      expect(dist.data[0].cumulativeChance).toBeCloseTo(1.0, 4);
+      for (let i = 1; i < dist.data.length; i++) {
+        expect(dist.data[i].cumulativeChance).toBeLessThanOrEqual(dist.data[i - 1].cumulativeChance + 1e-9);
+      }
+      const last = dist.data[dist.data.length - 1];
+      expect(last.cumulativeChance).toBeGreaterThanOrEqual(0);
+    });
+
+    it('verifies percentiles p25, median, p75 match the mathematical definitions from CDF', () => {
+      const dist = getTurnDamagePmf(sampleAttacks, 15, 'double_dice');
+
+      expect(dist.p25).toBeLessThanOrEqual(dist.median);
+      expect(dist.median).toBeLessThanOrEqual(dist.p75);
+
+      // At p25, cumulative probability of damage < p25 is <= 0.25 (or P(X <= p25) >= 0.25)
+      let cumSum = 0;
+      for (const pt of dist.data) {
+        cumSum += pt.probability;
+        if (pt.damage === dist.p25) {
+          expect(cumSum).toBeGreaterThanOrEqual(0.25 - 1e-4);
+          break;
+        }
+      }
+    });
+
+    it('handles edge case of no active attacks / empty party gracefully', () => {
+      const emptyTurn = getTurnDamagePmf([], 15, 'double_dice');
+      expect(emptyTurn.mean).toBe(0);
+      expect(emptyTurn.p25).toBe(0);
+      expect(emptyTurn.median).toBe(0);
+      expect(emptyTurn.p75).toBe(0);
+      expect(emptyTurn.data[0].damage).toBe(0);
+      expect(emptyTurn.data[0].probability).toBe(1.0);
+
+      const emptyParty = getPartyDamagePmf([], 15, 'double_dice');
+      expect(emptyParty.mean).toBe(0);
+      expect(emptyParty.data.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('10. Cumulative Survival CDF Tests (calculateSurvivalCdf)', () => {
+    const sampleParty = [
+      {
+        id: 'char-1',
+        name: 'Fighter',
+        enabled: true,
+        attacks: [
+          { attackBonus: 5, diceString: '2d6 + 3', enabled: true },
+        ],
+      },
+      {
+        id: 'char-2',
+        name: 'Rogue',
+        enabled: true,
+        attacks: [
+          { attackBonus: 5, diceString: '1d8 + 3', enabled: true },
+        ],
+      },
+      {
+        id: 'char-3',
+        name: 'Disabled Ranger',
+        enabled: false,
+        attacks: [
+          { attackBonus: 7, diceString: '1d10 + 4', enabled: true },
+        ],
+      },
+    ];
+
+    it('verifies that P(Damage >= 0) is 100% for party and all active characters', () => {
+      const cdf = calculateSurvivalCdf(sampleParty, 15, 'double_dice');
+      expect(cdf.length).toBeGreaterThan(0);
+      expect(cdf[0].damage).toBe(0);
+      expect(cdf[0].partyTotal).toBe(100);
+      expect(cdf[0]['char-1']).toBe(100);
+      expect(cdf[0]['char-2']).toBe(100);
+      // Disabled character should not have an entry
+      expect(cdf[0]['char-3']).toBeUndefined();
+    });
+
+    it('verifies that survival probability is monotonically non-increasing as damage increases', () => {
+      const cdf = calculateSurvivalCdf(sampleParty, 15, 'double_dice');
+
+      for (let i = 1; i < cdf.length; i++) {
+        expect(cdf[i].partyTotal).toBeLessThanOrEqual(cdf[i - 1].partyTotal);
+        expect(cdf[i]['char-1']).toBeLessThanOrEqual(cdf[i - 1]['char-1']);
+        expect(cdf[i]['char-2']).toBeLessThanOrEqual(cdf[i - 1]['char-2']);
+      }
+    });
+
+    it('reaches 0% beyond maximum possible damage', () => {
+      const cdf = calculateSurvivalCdf(sampleParty, 15, 'double_dice');
+      const lastPoint = cdf[cdf.length - 1];
+      expect(lastPoint.partyTotal).toBe(0);
+      expect(lastPoint['char-1']).toBe(0);
+      expect(lastPoint['char-2']).toBe(0);
+    });
+
+    it('accurately reflects critRule max_damage_bonus vs double_dice', () => {
+      const cdfDouble = calculateSurvivalCdf(sampleParty, 15, 'double_dice');
+      const cdfMax = calculateSurvivalCdf(sampleParty, 15, 'max_damage_bonus');
+
+      // max_damage_bonus can reach higher damage totals, so cdfMax length >= cdfDouble length
+      expect(cdfMax.length).toBeGreaterThanOrEqual(cdfDouble.length);
+
+      // At higher damage thresholds, max_damage_bonus should have >= survival chance than double_dice
+      const midDamage = Math.floor(cdfDouble.length / 2);
+      expect(cdfMax[midDamage].partyTotal).toBeGreaterThanOrEqual(cdfDouble[midDamage].partyTotal);
+    });
+
+    it('handles empty characters and all-disabled characters gracefully without crashing', () => {
+      const emptyCdf = calculateSurvivalCdf([], 15, 'double_dice');
+      expect(emptyCdf.length).toBeGreaterThan(0);
+      expect(emptyCdf[0].damage).toBe(0);
+      expect(emptyCdf[0].partyTotal).toBe(100);
+
+      const allDisabledCdf = calculateSurvivalCdf(
+        [{ id: 'd1', name: 'Disabled', enabled: false, attacks: [{ attackBonus: 5, diceString: '1d8', enabled: true }] }],
+        15,
+        'double_dice'
+      );
+      expect(allDisabledCdf.length).toBeGreaterThan(0);
+      expect(allDisabledCdf[0].partyTotal).toBe(100);
+    });
+  });
+
+  describe('11. Party & Attack DPR Share Tests (Contribution Breakdown)', () => {
+    const sampleParty = [
+      {
+        id: 'char-1',
+        name: 'Fighter',
+        enabled: true,
+        attacks: [
+          { id: 'a1', name: 'Greatsword 1', attackBonus: 7, diceString: '2d6 + 4', enabled: true },
+          { id: 'a2', name: 'Greatsword 2', attackBonus: 7, diceString: '2d6 + 4', enabled: true },
+        ],
+      },
+      {
+        id: 'char-2',
+        name: 'Rogue',
+        enabled: true,
+        attacks: [
+          { id: 'a3', name: 'Sneak Attack', attackBonus: 7, diceString: '1d8 + 3d6 + 4', enabled: true },
+        ],
+      },
+      {
+        id: 'char-3',
+        name: 'Disabled Wizard',
+        enabled: false,
+        attacks: [
+          { id: 'a4', name: 'Fireball', attackBonus: 99, diceString: '8d6', enabled: true },
+        ],
+      },
+    ];
+
+    it('calculates party DPR shares and ensures they sum to 100%', () => {
+      const shares = calculatePartyDprShare(sampleParty, 15, 'double_dice');
+      expect(shares.length).toBe(2); // char-1 and char-2 (char-3 is disabled)
+
+      const totalShare = shares.reduce((acc, curr) => acc + curr.share, 0);
+      expect(Math.abs(totalShare - 100)).toBeLessThanOrEqual(0.2); // rounding tolerance
+      expect(shares[0].dpr).toBeGreaterThan(0);
+      expect(shares[1].dpr).toBeGreaterThan(0);
+    });
+
+    it('calculates individual character attack shares correctly', () => {
+      const fighter = sampleParty[0];
+      const attackShares = calculateCharacterAttackShare(fighter, 15, 'double_dice');
+      expect(attackShares.length).toBe(2);
+
+      // Since both attacks are identical, each should have 50.0% share
+      expect(attackShares[0].share).toBe(50.0);
+      expect(attackShares[1].share).toBe(50.0);
+      expect(attackShares[0].dpr).toBe(attackShares[1].dpr);
+    });
+
+    it('returns 100% share when only one character is enabled', () => {
+      const singleParty = [sampleParty[0]];
+      const shares = calculatePartyDprShare(singleParty, 15, 'double_dice');
+      expect(shares.length).toBe(1);
+      expect(shares[0].share).toBe(100.0);
+    });
+
+    it('handles empty characters and all-disabled gracefully without NaN', () => {
+      const emptyShares = calculatePartyDprShare([], 15, 'double_dice');
+      expect(emptyShares).toEqual([]);
+
+      const disabledParty = [
+        { id: 'd1', name: 'Disabled', enabled: false, attacks: [{ attackBonus: 5, diceString: '1d8', enabled: true }] },
+      ];
+      const disabledShares = calculatePartyDprShare(disabledParty, 15, 'double_dice');
+      expect(disabledShares).toEqual([]);
+
+      const zeroDprParty = [
+        { id: 'z1', name: 'Zero Atk', enabled: true, attacks: [] },
+      ];
+      const zeroShares = calculatePartyDprShare(zeroDprParty, 15, 'double_dice');
+      expect(zeroShares.length).toBe(1);
+      expect(zeroShares[0].share).toBe(0);
+      expect(zeroShares[0].dpr).toBe(0);
+      expect(isNaN(zeroShares[0].share)).toBe(false);
     });
   });
 

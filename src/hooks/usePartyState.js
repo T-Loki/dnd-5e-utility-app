@@ -5,6 +5,7 @@ import {
   DiceParser,
   buildAttackOnHitPmf,
   combineAttackPercentiles,
+  calculateAcSweep,
 } from '../engine/dprEngine';
 
 const STORAGE_KEY = 'dnd_party_damage_calc_react_v1';
@@ -84,6 +85,7 @@ export function usePartyState() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [draggedAttack, setDraggedAttack] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+  const [activeTab, setActiveTab] = useState('roster');
 
   useEffect(() => {
     try {
@@ -310,6 +312,10 @@ export function usePartyState() {
       activeCharacterCount,
     };
   }, [characters, targetAC, critRule]);
+
+  const acSweepData = useMemo(() => {
+    return calculateAcSweep(characters, critRule, 10, 25);
+  }, [characters, critRule]);
 
   const handleAddCharacter = () => {
     const newChar = {
@@ -552,6 +558,9 @@ export function usePartyState() {
     partySummary,
     getAttackMetrics,
     getCharacterMetrics,
+    activeTab,
+    setActiveTab,
+    acSweepData,
     handlers: {
       handleAddCharacter,
       handleDuplicateCharacter,

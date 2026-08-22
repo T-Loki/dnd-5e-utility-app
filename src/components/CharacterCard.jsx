@@ -1,5 +1,6 @@
 import React from 'react';
 import { AttackItem } from './AttackItem';
+import { getTurnDamagePmf } from '../engine/dprEngine';
 
 const formatNum = (val) => {
   if (isNaN(val)) return '0.00';
@@ -24,8 +25,24 @@ export function CharacterCard({
   draggedAttack,
   dropTarget,
   handlers,
+  onOpenDistributionModal,
 }) {
   const charMetrics = getCharacterMetrics(char);
+
+  const handleOpenCharCurve = (e) => {
+    e.stopPropagation();
+    if (!onOpenDistributionModal) return;
+    const distResult = getTurnDamagePmf(char.attacks || [], Number(targetAC) || 15, critRule);
+    onOpenDistributionModal({
+      type: 'character',
+      char,
+      title: `${char.name || 'Hero'} Damage Distribution`,
+      subtitle: `Full turn damage probability mass function convolving all active attacks against Target AC ${targetAC}`,
+      distributionResult: distResult,
+      targetAC,
+      critRule,
+    });
+  };
 
   return (
     <div className={`char-card ${!char.enabled ? 'disabled' : ''}`}>
@@ -181,6 +198,24 @@ export function CharacterCard({
                 {formatNum(charMetrics.maxDpr)}
               </div>
             </div>
+
+            <div
+              style={{
+                width: 1,
+                height: 22,
+                background: 'var(--border-color)',
+              }}
+            />
+
+            {/* View PMF Curve Button */}
+            <button
+              type="button"
+              onClick={handleOpenCharCurve}
+              className="btn-card-curve"
+              title={`View ${char.name || 'Character'} PMF Damage Distribution Curve`}
+            >
+              📊 Curve
+            </button>
           </div>
 
           {/* Character Controls */}
